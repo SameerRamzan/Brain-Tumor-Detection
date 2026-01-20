@@ -18,3 +18,5 @@ matplotlib
 seaborn
 python-dotenv
 argon2-cffi
+pytest
+httpx
