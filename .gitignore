@@ -1,0 +1,4 @@
+*.keras
+# Also ignore any other heavy model formats
+*.h5
+*.pt

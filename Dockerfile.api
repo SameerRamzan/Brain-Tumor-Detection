@@ -1,0 +1,22 @@
+# Use Python 3.9 Slim image
+FROM python:3.9-slim
+
+# Install system dependencies required for OpenCV
+RUN apt-get update && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements and install
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the application code
+COPY api.py data_utils.py ./
+# Copy models
+COPY VGG16_brain_tumor_detection_model.keras .
+COPY ResNet50_brain_tumor_detection_model.keras .
+
+# Expose port and run
+EXPOSE 8000
+CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]

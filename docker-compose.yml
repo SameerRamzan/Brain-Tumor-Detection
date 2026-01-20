@@ -1,0 +1,60 @@
+services:
+  # 1. MongoDB Database
+  mongodb:
+    image: mongo:latest
+    container_name: brain_tumor_db
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - brain_net
+
+  # 2. FastAPI Backend
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: brain_tumor_api
+    ports:
+      - "8000:8000"
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017
+    depends_on:
+      - mongodb
+    networks:
+      - brain_net
+
+  # 3. Streamlit Frontend
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    container_name: brain_tumor_ui
+    ports:
+      - "8501:8501"
+    environment:
+      - API_URL=http://backend:8000
+    depends_on:
+      - backend
+    networks:
+      - brain_net
+
+networks:
+  brain_net:
+    driver: bridge
+
+volumes:
+  mongo_data:
+
+### How to Run Everything Now
+# 1.  Ensure Docker Desktop is installed and running.
+# 2.  Open your terminal in the project folder.
+# 3.  Run: `docker-compose up --build`
+# 4.  Access your app at `http://localhost:8501`.
+
+# This setup mimics a production environment where services communicate over a private network (`brain_net`), and your data persists in a Docker volume (`mongo_data`) even if you restart the containers.
+
+# <!--
+# [PROMPT_SUGGESTION]How can I deploy this Docker setup to a cloud provider like AWS or Render?[/PROMPT_SUGGESTION]
+# [PROMPT_SUGGESTION]Can you help me write a unit test for the API using pytest?[/PROMPT_SUGGESTION]
