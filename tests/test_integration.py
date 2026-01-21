@@ -11,14 +11,15 @@ def test_api_documentation_accessible():
     This confirms the container started and the app is running.
     """
     # Retry logic to wait for container startup
-    max_retries = 5
+    # Increased retries: 30 attempts * 2 seconds = 60 seconds wait time
+    max_retries = 30
     for _ in range(max_retries):
         try:
-            response = httpx.get(f"{API_URL}/docs")
+            response = httpx.get(f"{API_URL}/docs", timeout=5)
             if response.status_code == 200:
                 assert response.status_code == 200
                 return
-        except httpx.ConnectError:
+        except httpx.RequestError:
             time.sleep(2)
     
     pytest.fail("Could not connect to API docs after multiple retries.")
@@ -30,10 +31,11 @@ def test_token_endpoint_exists():
     try:
         response = httpx.post(
             f"{API_URL}/token", 
-            data={"username": "test", "password": "wrongpassword"}
+            data={"username": "test", "password": "wrongpassword"},
+            timeout=5
         )
         # Should return 401 Unauthorized (meaning the endpoint works)
         # or 503 if DB is initializing, but we accept 401 as success for connectivity.
         assert response.status_code in [401, 503]
-    except httpx.ConnectError:
+    except httpx.RequestError:
         pytest.fail("Could not connect to Token endpoint.")

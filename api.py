@@ -222,7 +222,8 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
         raise HTTPException(status_code=503, detail="Database not connected")
 
     user = await db_client.brain_tumor_db.users.find_one({"username": form_data.username})
-    print(f"DEBUG LOGIN: User '{form_data.username}' found. is_admin value: {user.get('is_admin')} (Type: {type(user.get('is_admin'))})")
+    if user:
+        print(f"DEBUG LOGIN: User '{form_data.username}' found. is_admin value: {user.get('is_admin')} (Type: {type(user.get('is_admin'))})")
     if not user or not verify_password(form_data.password, user['hashed_password']):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
