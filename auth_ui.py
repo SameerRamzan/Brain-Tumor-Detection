@@ -3,14 +3,15 @@ import requests
 import styles_auth_ui
 import os
 
-API_URL = os.getenv("API_URL", "http://localhost:8000")
-
 def login_register_page():
 
     login_placeholder = st.empty()
 
     with login_placeholder.container():
         styles_auth_ui.apply_auth_styles()
+
+        # Fetch API_URL dynamically and remove trailing slash to prevent double slashes
+        api_url = os.getenv("API_URL", "http://localhost:8000").rstrip("/")
 
         # --- Header Section ---
         st.markdown("<h1 style='text-align: center; color: #00D4FF;'>🧠 Brain Tumor Detection AI</h1>", unsafe_allow_html=True)
@@ -36,7 +37,7 @@ def login_register_page():
                         else:
                             try:
                                 response = requests.post(
-                                    f"{API_URL}/token", 
+                                    f"{api_url}/token", 
                                     data={"username": username, "password": password}
                                 )
                                 if response.status_code == 200:
@@ -67,7 +68,7 @@ def login_register_page():
                                     st.warning("All fields are required.")
                                 else:
                                     try:
-                                        resp = requests.post(f"{API_URL}/reset-password", data={
+                                        resp = requests.post(f"{api_url}/reset-password", data={
                                             "username": rst_user.strip(),
                                             "recovery_key": rst_key.strip(),
                                             "new_password": rst_new_pass
@@ -93,7 +94,7 @@ def login_register_page():
                             st.warning("All fields are required.")
                         else:
                             try:
-                                response = requests.post(f"{API_URL}/register", data={
+                                response = requests.post(f"{api_url}/register", data={
                                     "username": new_user, 
                                     "password": new_pass,
                                     "recovery_key": recovery_key
