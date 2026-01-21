@@ -34,7 +34,7 @@ jobs:
         touch ResNet50_brain_tumor_detection_model.keras
 
     - name: Build and Start Containers
-      run: docker-compose up -d --build
+      run: docker compose up -d --build
 
     - name: Wait for Services to Initialize
       run: sleep 15
@@ -47,4 +47,4 @@ jobs:
 
     - name: Stop Containers
       if: always()
-      run: docker-compose down
+      run: docker compose down

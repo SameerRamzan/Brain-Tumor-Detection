@@ -1,5 +1,7 @@
 # Brain Tumor Detection using Deep Learning
 
+[![Brain Tumor Detection CI](https://github.com/SameerRamzan/Brain-Tumor-Detection/actions/workflows/ci.yml/badge.svg)](https://github.com/SameerRamzan/Brain-Tumor-Detection/actions/workflows/ci.yml)
+
 This project uses Convolutional Neural Networks (CNNs) to classify MRI scans of human brains as either containing a tumor ("Yes") or not ("No"). The project explores multiple state-of-the-art architectures via transfer learning, identifying **VGG16** and **ResNet50** as the most effective models for this specific dataset. An ensemble of these models is then used to achieve a more robust final prediction.
 
 ## Table of Contents
@@ -16,6 +18,10 @@ This project uses Convolutional Neural Networks (CNNs) to classify MRI scans of 
     - [6. Ensemble Learning](#6-ensemble-learning)
   - [Results \& Analysis](#results--analysis)
   - [Application Architecture](#application-architecture)
+    - [1. Backend (FastAPI)](#1-backend-fastapi)
+    - [2. Frontend (Streamlit)](#2-frontend-streamlit)
+    - [3. Database (MongoDB)](#3-database-mongodb)
+    - [4. Deployment (Docker)](#4-deployment-docker)
   - [How to Run (Web Application)](#how-to-run-web-application)
   - [How to Run (Model Training)](#how-to-run-model-training)
   - [Dependencies](#dependencies)
