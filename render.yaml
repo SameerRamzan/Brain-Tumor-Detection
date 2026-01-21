@@ -6,13 +6,12 @@ services:
     dockerfilePath: ./Dockerfile.api
     plan: free
     healthCheckPath: /docs
+    startCommand: uvicorn api:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: MONGO_URI
         sync: false # You will enter this manually in the Render Dashboard
       - key: SECRET_KEY
         generateValue: true
-      - key: PORT
-        value: 8000
       - key: VGG16_MODEL_PATH
         value: VGG16_brain_tumor_detection_model.keras
       - key: RESNET50_MODEL_PATH
@@ -28,11 +27,10 @@ services:
     env: docker
     dockerfilePath: ./Dockerfile.app
     plan: free
+    startCommand: streamlit run app.py --server.port $PORT --server.address 0.0.0.0
     envVars:
       - key: API_URL
         fromService:
           type: web
           name: brain-tumor-api
           property: url
-      - key: PORT
-        value: 8501
