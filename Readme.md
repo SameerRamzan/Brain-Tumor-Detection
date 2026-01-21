@@ -22,6 +22,7 @@ This project uses Convolutional Neural Networks (CNNs) to classify MRI scans of 
     - [2. Frontend (Streamlit)](#2-frontend-streamlit)
     - [3. Database (MongoDB)](#3-database-mongodb)
     - [4. Deployment (Docker)](#4-deployment-docker)
+    - [5. CI/CD Pipeline (GitHub Actions)](#5-cicd-pipeline-github-actions)
   - [How to Run (Web Application)](#how-to-run-web-application)
   - [How to Run (Model Training)](#how-to-run-model-training)
   - [Dependencies](#dependencies)
@@ -143,6 +144,10 @@ The project has been evolved from a Jupyter Notebook into a full-stack web appli
 
 ### 4. Deployment (Docker)
 - The entire stack (Frontend, Backend, Database) is orchestrated using **Docker Compose**, ensuring a consistent environment across different machines.
+
+### 5. CI/CD Pipeline (GitHub Actions)
+- **Automation**: A Continuous Integration workflow is set up to automatically build the Docker containers and run integration tests on every push to the `main` branch.
+- **Testing**: Integration tests verify that the API endpoints (`/docs`, `/token`) are reachable and functioning correctly within the containerized environment.
 
 ## How to Run (Web Application)
 
