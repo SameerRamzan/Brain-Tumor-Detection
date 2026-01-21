@@ -33,6 +33,14 @@ jobs:
         touch VGG16_brain_tumor_detection_model.keras
         touch ResNet50_brain_tumor_detection_model.keras
 
+    - name: Create .env file for Docker Compose
+      run: |
+        echo "MONGO_URI=mongodb://mongodb:27017" >> .env
+        echo "API_URL=http://backend:8000" >> .env
+        echo "SECRET_KEY=ci_super_secret_key_for_testing" >> .env
+        echo "VGG16_MODEL_PATH=VGG16_brain_tumor_detection_model.keras" >> .env
+        echo "RESNET50_MODEL_PATH=ResNet50_brain_tumor_detection_model.keras" >> .env
+
     - name: Build and Start Containers
       run: docker compose up -d --build
 
