@@ -1,0 +1,38 @@
+services:
+  # 1. FastAPI Backend
+  - type: web
+    name: brain-tumor-api
+    env: docker
+    dockerfilePath: ./Dockerfile.api
+    plan: free
+    healthCheckPath: /docs
+    envVars:
+      - key: MONGO_URI
+        sync: false # You will enter this manually in the Render Dashboard
+      - key: SECRET_KEY
+        generateValue: true
+      - key: PORT
+        value: 8000
+      - key: VGG16_MODEL_PATH
+        value: VGG16_brain_tumor_detection_model.keras
+      - key: RESNET50_MODEL_PATH
+        value: ResNet50_brain_tumor_detection_model.keras
+      - key: VGG16_DRIVE_ID
+        sync: false
+      - key: RESNET50_DRIVE_ID
+        sync: false
+
+  # 2. Streamlit Frontend
+  - type: web
+    name: brain-tumor-ui
+    env: docker
+    dockerfilePath: ./Dockerfile.app
+    plan: free
+    envVars:
+      - key: API_URL
+        fromService:
+          type: web
+          name: brain-tumor-api
+          property: url
+      - key: PORT
+        value: 8501

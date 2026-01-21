@@ -20,6 +20,7 @@ from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorGridFSBucket
 from datetime import datetime, timedelta
 from bson import ObjectId
 from dotenv import load_dotenv
+import gdown
 
 # Import local utility from data_utils.py
 try:
@@ -34,6 +35,16 @@ def load_models_into_memory():
     """Loads all configured Keras models once on startup."""
     global MODELS
     for name, config in MODEL_CONFIG.items():
+        # Check if model exists, if not try to download from Google Drive
+        if not os.path.exists(config["path"]):
+            drive_id = os.getenv(f"{name.upper()}_DRIVE_ID")
+            if drive_id:
+                print(f"⬇️ Model '{name}' not found. Downloading from Google Drive (ID: {drive_id})...")
+                try:
+                    gdown.download(id=drive_id, output=config["path"], quiet=False)
+                except Exception as e:
+                    print(f"❌ Failed to download model '{name}': {e}")
+
         try:
             MODELS[name] = tf.keras.models.load_model(config["path"])
             print(f"✅ Model '{name}' loaded successfully from {config['path']}")
@@ -775,4 +786,5 @@ async def delete_history_record(record_id: str, current_user: User = Depends(get
         raise HTTPException(status_code=400, detail=f"Invalid ID format or error: {e}")
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
