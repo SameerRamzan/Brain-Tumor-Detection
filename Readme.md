@@ -154,16 +154,22 @@ The project has been evolved from a Jupyter Notebook into a full-stack web appli
 To run the complete web application using Docker:
 
 1.  **Prerequisites**: Ensure **Docker Desktop** is installed and running on your machine.
-2.  **Build and Run**: Open your terminal in the project root and execute:
+2.  **Configuration**: Create a `.env` file in the project root (see `.env.example` or below) to set your secrets:
+    ```env
+    MONGO_URI=mongodb://mongodb:27017
+    API_URL=http://backend:8000
+    SECRET_KEY=your_secure_random_key_here
+    ```
+3.  **Build and Run**: Open your terminal in the project root and execute:
     ```bash
     docker-compose up --build
     ```
-3.  **Access the App**: Open your browser and navigate to `http://localhost:8501`.
-4.  **Create Admin User**: To access admin features, run the creation script inside the container:
+4.  **Access the App**: Open your browser and navigate to `http://localhost:8501`.
+5.  **Create Admin User**: To access admin features, run the creation script inside the container:
     ```bash
     docker exec -it brain_tumor_ui python create_admin.py
     ```
-5.  **API Documentation**: You can view the backend API docs at `http://localhost:8000/docs`.
+6.  **API Documentation**: You can view the backend API docs at `http://localhost:8000/docs`.
 
 ## How to Run (Model Training)
 

@@ -19,12 +19,16 @@ from PIL import Image
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorGridFSBucket
 from datetime import datetime, timedelta
 from bson import ObjectId
+from dotenv import load_dotenv
 
 # Import local utility from data_utils.py
 try:
     from data_utils import letterbox
 except ImportError:
     raise ImportError("Could not import 'letterbox' from 'data_utils.py'. Ensure the file exists in the same directory.")
+
+# Load environment variables
+load_dotenv()
 
 def load_models_into_memory():
     """Loads all configured Keras models once on startup."""
@@ -97,7 +101,7 @@ HIGH_CONFIDENCE_THRESHOLD = 0.70
 LOW_CONFIDENCE_THRESHOLD = 0.30
 
 # Authentication Configuration
-SECRET_KEY = "YOUR_SUPER_SECRET_KEY_CHANGE_THIS_IN_PRODUCTION"
+SECRET_KEY = os.getenv("SECRET_KEY", "YOUR_SUPER_SECRET_KEY_CHANGE_THIS_IN_PRODUCTION")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
