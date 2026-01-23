@@ -65,11 +65,13 @@ async def lifespan(app: FastAPI):
     global db_client, history_collection, fs
     try:
         db_client = AsyncIOMotorClient(MONGO_URI)
+        # Force a connection check to fail fast if DB is unreachable
+        await db_client.admin.command('ping')
         history_collection = db_client.brain_tumor_db.history
         fs = AsyncIOMotorGridFSBucket(db_client.brain_tumor_db)
-        print("✅ Connected to MongoDB")
+        print(f"✅ Connected to MongoDB at {MONGO_URI}")
     except Exception as e:
-        print(f"⚠️ Could not connect to MongoDB: {e}")
+        print(f"⚠️ Could not connect to MongoDB at {MONGO_URI}: {e}")
     yield
     # Code to run on shutdown (optional)
     if db_client:
