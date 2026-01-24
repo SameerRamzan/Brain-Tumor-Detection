@@ -58,7 +58,7 @@ def download_large_file(file_id, save_path):
         return True
 
     print(f"⬇️ Downloading ID: {file_id} to {save_path}...")
-    URL = "https://docs.google.com/uc?export=download"
+    URL = "https://drive.google.com/uc?export=download"
     session = requests.Session()
     
     # First request to get the confirmation token
@@ -68,6 +68,13 @@ def download_large_file(file_id, save_path):
         if key.startswith('download_warning'):
             token = value
             break
+            
+    # Fallback: Check session cookies
+    if not token:
+        for key, value in session.cookies.items():
+            if key.startswith('download_warning'):
+                token = value
+                break
             
     # Second request using the token to get the actual file
     if token:
@@ -149,6 +156,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"], # Allows the frontend to send any type of data header (like Content-Type: application/json or custom headers).
 )
+
+@app.get("/")
+async def root():
+    return {"message": "Brain Tumor Detection API is running. Go to /docs for API documentation."}
 
 # Global Configuration
 MODELS = {}
