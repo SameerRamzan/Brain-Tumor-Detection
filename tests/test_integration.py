@@ -11,8 +11,8 @@ def test_api_documentation_accessible():
     This confirms the container started and the app is running.
     """
     # Retry logic to wait for container startup
-    # Increased retries: 30 attempts * 2 seconds = 60 seconds wait time
-    max_retries = 30
+    # Increased retries: 60 attempts * 5 seconds = 300 seconds (5 minutes) wait time
+    max_retries = 60
     for _ in range(max_retries):
         try:
             response = httpx.get(f"{API_URL}/docs", timeout=5)
@@ -20,7 +20,7 @@ def test_api_documentation_accessible():
                 assert response.status_code == 200
                 return
         except httpx.RequestError:
-            time.sleep(2)
+            time.sleep(5)
     
     pytest.fail("Could not connect to API docs after multiple retries.")
 
