@@ -52,37 +52,39 @@ def extract_drive_id(url_or_id: str) -> str:
     print(f"DEBUG: Could not extract a standard Drive ID from '{url_or_id}'. Using the value as is.")
     return url_or_id # Fallback to returning the original string
 
-def download_file_from_google_drive(id, destination):
-    def get_confirm_token(response):
-        for key, value in response.cookies.items():
-            if key.startswith('download_warning'):
-                return value
-        return None
+def download_large_file(file_id, save_path):
+    if os.path.exists(save_path):
+        print(f"✅ {save_path} already exists.")
+        return True
 
-    def save_response_content(response, destination):
-        CHUNK_SIZE = 32768
-        with open(destination, "wb") as f:
-            for chunk in response.iter_content(CHUNK_SIZE):
-                if chunk: # filter out keep-alive new chunks
-                    f.write(chunk)
-
-    if os.path.exists(destination):
-        print(f"✅ {destination} already exists.")
-        return
-
-    print(f"⬇️ Downloading {destination}...")
+    print(f"⬇️ Downloading ID: {file_id} to {save_path}...")
     URL = "https://docs.google.com/uc?export=download"
     session = requests.Session()
-
-    response = session.get(URL, params={'id': id}, stream=True)
-    token = get_confirm_token(response)
-
+    
+    # First request to get the confirmation token
+    response = session.get(URL, params={'id': file_id}, stream=True)
+    token = None
+    for key, value in response.cookies.items():
+        if key.startswith('download_warning'):
+            token = value
+            break
+            
+    # Second request using the token to get the actual file
     if token:
-        params = {'id': id, 'confirm': token}
-        response = session.get(URL, params=params, stream=True)
-
-    save_response_content(response, destination)
-    print(f"✨ {destination} download complete.")
+        response = session.get(URL, params={'id': file_id, 'confirm': token}, stream=True)
+    
+    with open(save_path, "wb") as f:
+        for chunk in response.iter_content(chunk_size=32768):
+            if chunk: f.write(chunk)
+            
+    # Check if we actually got a file or just a small HTML error page
+    if os.path.getsize(save_path) < 100000: # If less than 100KB, it's probably an error page
+        print(f"❌ Download failed for {save_path}. File too small (likely an error page).")
+        os.remove(save_path)
+        return False
+        
+    print(f"✨ {save_path} download successful!")
+    return True
 
 def load_models_into_memory():
     """Loads all configured Keras models once on startup."""
@@ -95,7 +97,7 @@ def load_models_into_memory():
                 drive_id = extract_drive_id(drive_id_or_url)
                 print(f"⬇️ Model '{name}' not found. Downloading from Google Drive (ID: {drive_id})...")
                 try:
-                    download_file_from_google_drive(drive_id, config["path"])
+                    download_large_file(drive_id, config["path"])
                 except Exception as e:
                     print(f"❌ Failed to download model '{name}': {e}")
 
