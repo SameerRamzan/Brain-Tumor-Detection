@@ -20,4 +20,3 @@ python-dotenv
 argon2-cffi
 pytest
 httpx
-gdown

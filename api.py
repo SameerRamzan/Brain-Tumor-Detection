@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 from bson import ObjectId
 from dotenv import load_dotenv
 import re
-import gdown
+import requests
 
 # Import local utility from data_utils.py
 try:
@@ -52,6 +52,38 @@ def extract_drive_id(url_or_id: str) -> str:
     print(f"DEBUG: Could not extract a standard Drive ID from '{url_or_id}'. Using the value as is.")
     return url_or_id # Fallback to returning the original string
 
+def download_file_from_google_drive(id, destination):
+    def get_confirm_token(response):
+        for key, value in response.cookies.items():
+            if key.startswith('download_warning'):
+                return value
+        return None
+
+    def save_response_content(response, destination):
+        CHUNK_SIZE = 32768
+        with open(destination, "wb") as f:
+            for chunk in response.iter_content(CHUNK_SIZE):
+                if chunk: # filter out keep-alive new chunks
+                    f.write(chunk)
+
+    if os.path.exists(destination):
+        print(f"✅ {destination} already exists.")
+        return
+
+    print(f"⬇️ Downloading {destination}...")
+    URL = "https://docs.google.com/uc?export=download"
+    session = requests.Session()
+
+    response = session.get(URL, params={'id': id}, stream=True)
+    token = get_confirm_token(response)
+
+    if token:
+        params = {'id': id, 'confirm': token}
+        response = session.get(URL, params=params, stream=True)
+
+    save_response_content(response, destination)
+    print(f"✨ {destination} download complete.")
+
 def load_models_into_memory():
     """Loads all configured Keras models once on startup."""
     global MODELS
@@ -63,7 +95,7 @@ def load_models_into_memory():
                 drive_id = extract_drive_id(drive_id_or_url)
                 print(f"⬇️ Model '{name}' not found. Downloading from Google Drive (ID: {drive_id})...")
                 try:
-                    gdown.download(id=drive_id, output=config["path"], quiet=False)
+                    download_file_from_google_drive(drive_id, config["path"])
                 except Exception as e:
                     print(f"❌ Failed to download model '{name}': {e}")
 
