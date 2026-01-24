@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 from bson import ObjectId
 from dotenv import load_dotenv
 import re
-import requests
+from huggingface_hub import hf_hub_download, HfHubHTTPError
 
 # Import local utility from data_utils.py
 try:
@@ -32,79 +32,48 @@ except ImportError:
 # Load environment variables
 load_dotenv()
 
-def extract_drive_id(url_or_id: str) -> str:
-    """Extracts the Google Drive file ID from a URL or returns the ID if it's already an ID."""
-    if not url_or_id:
-        return ""
-    # A typical ID is > 25 characters. This check is a bit loose but helps.
-    if re.match(r'^[a-zA-Z0-9_-]{25,}$', url_or_id):
-        return url_or_id
-    
-    # Regex to find the ID in various Google Drive URL formats
-    # e.g., /d/FILE_ID/
-    # e.g., ?id=FILE_ID
-    # e.g., drive.usercontent.google.com/download?id=FILE_ID&...
-    match = re.search(r'(?:/d/|id=)([a-zA-Z0-9_-]{25,})', url_or_id)
-    if match:
-        print(f"DEBUG: Extracted Drive ID '{match.group(1)}' from provided string.")
-        return match.group(1)
-    
-    print(f"DEBUG: Could not extract a standard Drive ID from '{url_or_id}'. Using the value as is.")
-    return url_or_id # Fallback to returning the original string
-
-def download_large_file(file_id, save_path):
+def download_model_from_hf(repo_id, filename, save_path):
+    """Downloads a model file from a Hugging Face Hub repository."""
     if os.path.exists(save_path):
         print(f"✅ {save_path} already exists.")
         return True
-
-    print(f"⬇️ Downloading ID: {file_id} to {save_path}...")
-    URL = "https://drive.google.com/uc?export=download"
-    session = requests.Session()
     
-    # First request to get the confirmation token
-    response = session.get(URL, params={'id': file_id}, stream=True)
-    token = None
-    for key, value in response.cookies.items():
-        if key.startswith('download_warning'):
-            token = value
-            break
-            
-    # Fallback: Check session cookies
-    if not token:
-        for key, value in session.cookies.items():
-            if key.startswith('download_warning'):
-                token = value
-                break
-            
-    # Second request using the token to get the actual file
-    if token:
-        response = session.get(URL, params={'id': file_id, 'confirm': token}, stream=True)
-    
-    with open(save_path, "wb") as f:
-        for chunk in response.iter_content(chunk_size=32768):
-            if chunk: f.write(chunk)
-            
-    # Check if we actually got a file or just a small HTML error page
-    if os.path.getsize(save_path) < 100000: # If less than 100KB, it's probably an error page
-        print(f"❌ Download failed for {save_path}. File too small (likely an error page).")
-        os.remove(save_path)
+    print(f"⬇️ Downloading '{filename}' from Hugging Face repo '{repo_id}'...")
+    try:
+        # hf_hub_download will download the file and cache it.
+        # To place it directly in our project folder, we specify local_dir.
+        hf_hub_download(
+            repo_id=repo_id,
+            filename=filename,
+            local_dir=os.path.dirname(save_path),
+            local_dir_use_symlinks=False # Use file copy, not symlinks
+        )
+        print(f"✨ {save_path} download successful!")
+        return True
+    except HfHubHTTPError as e:
+        print(f"❌ Failed to download from Hugging Face. Check repo ID and filename. Error: {e}")
         return False
-        
-    print(f"✨ {save_path} download successful!")
-    return True
+    except Exception as e:
+        print(f"❌ An unexpected error occurred during download: {e}")
+        return False
 
 def load_models_into_memory():
     """Loads all configured Keras models once on startup."""
     global MODELS
+    hf_repo_id = os.getenv("HF_REPO_ID")
+
     for name, config in MODEL_CONFIG.items():
         # Check if model exists, if not try to download from Google Drive
         if not os.path.exists(config["path"]):
-            drive_id_or_url = os.getenv(f"{name.upper()}_DRIVE_ID")
-            if drive_id_or_url:
-                drive_id = extract_drive_id(drive_id_or_url)
-                print(f"⬇️ Model '{name}' not found. Downloading from Google Drive (ID: {drive_id})...")
+            if hf_repo_id:
+                filename_in_repo = os.path.basename(config["path"])
+                print(f"⬇️ Model '{name}' not found locally. Attempting to download from Hugging Face...")
                 try:
-                    download_large_file(drive_id, config["path"])
+                    download_model_from_hf(
+                        repo_id=hf_repo_id,
+                        filename=filename_in_repo,
+                        save_path=config["path"]
+                    )
                 except Exception as e:
                     print(f"❌ Failed to download model '{name}': {e}")
 
@@ -157,7 +126,7 @@ app.add_middleware(
     allow_headers=["*"], # Allows the frontend to send any type of data header (like Content-Type: application/json or custom headers).
 )
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 async def root():
     return {"message": "Brain Tumor Detection API is running. Go to /docs for API documentation."}
 
