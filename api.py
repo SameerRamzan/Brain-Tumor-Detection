@@ -1,4 +1,6 @@
 import os
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+import asyncio
 import uvicorn
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Query, Depends, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -21,7 +23,7 @@ from datetime import datetime, timedelta
 from bson import ObjectId
 from dotenv import load_dotenv
 import re
-from huggingface_hub import hf_hub_download, HfHubHTTPError
+from huggingface_hub import hf_hub_download
 
 # Import local utility from data_utils.py
 try:
@@ -50,11 +52,8 @@ def download_model_from_hf(repo_id, filename, save_path):
         )
         print(f"✨ {save_path} download successful!")
         return True
-    except HfHubHTTPError as e:
-        print(f"❌ Failed to download from Hugging Face. Check repo ID and filename. Error: {e}")
-        return False
     except Exception as e:
-        print(f"❌ An unexpected error occurred during download: {e}")
+        print(f"❌ Failed to download from Hugging Face. Error: {e}")
         return False
 
 def load_models_into_memory():
@@ -93,7 +92,8 @@ fs = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Code to run on startup
-    load_models_into_memory()
+    # Run model loading in background to prevent blocking server startup
+    asyncio.create_task(asyncio.to_thread(load_models_into_memory))
     global db_client, history_collection, fs
     try:
         db_client = AsyncIOMotorClient(MONGO_URI)
