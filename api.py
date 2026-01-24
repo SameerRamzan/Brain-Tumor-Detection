@@ -47,8 +47,8 @@ def download_model_from_hf(repo_id, filename, save_path):
         hf_hub_download(
             repo_id=repo_id,
             filename=filename,
-            local_dir=os.path.dirname(save_path),
-            local_dir_use_symlinks=False # Use file copy, not symlinks
+            local_dir=os.path.dirname(save_path)
+            # local_dir_use_symlinks=False # Use file copy, not symlinks
         )
         print(f"✨ {save_path} download successful!")
         return True
