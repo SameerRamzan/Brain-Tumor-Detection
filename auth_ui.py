@@ -3,14 +3,15 @@ import requests
 import styles_auth_ui
 import os
 
-API_URL = os.getenv("API_URL", "http://localhost:8000")
-
 def login_register_page():
 
     login_placeholder = st.empty()
 
     with login_placeholder.container():
         styles_auth_ui.apply_auth_styles()
+
+        # Fetch API_URL dynamically and remove trailing slash to prevent double slashes
+        api_url = os.getenv("API_URL", "http://localhost:8000").rstrip("/")
 
         # --- Header Section ---
         st.markdown("<h1 style='text-align: center; color: #00D4FF;'>🧠 Brain Tumor Detection AI</h1>", unsafe_allow_html=True)
@@ -32,11 +33,11 @@ def login_register_page():
                     st.markdown("<br>", unsafe_allow_html=True)
                     if st.button("Log In", type="primary", use_container_width=True):
                         if not username or not password:
-                            st.warning("Please enter both credentials.")
+                            st.warning("Please enter both username and password.")
                         else:
                             try:
                                 response = requests.post(
-                                    f"{API_URL}/token", 
+                                    f"{api_url}/token", 
                                     data={"username": username, "password": password}
                                 )
                                 if response.status_code == 200:
@@ -49,10 +50,14 @@ def login_register_page():
                                     st.query_params['is_admin'] = str(token_data.get('is_admin', False)).lower()
                                     login_placeholder.empty()
                                     st.rerun()
-                                else:
+                                elif response.status_code == 401:
                                     st.error("Invalid credentials. Please try again.")
+                                else:
+                                    st.error(f"Server Error: Received status code {response.status_code}. Check backend logs.")
+                            except requests.exceptions.ConnectionError:
+                                st.error(f"Connection Error: Could not connect to API at `{api_url}`. Check the `API_URL` environment variable and ensure the backend is running.")
                             except Exception as e:
-                                st.error(f"Server Connection Error: {e}")
+                                st.error(f"An unexpected error occurred: {e}")
                     
                     st.markdown("<br>", unsafe_allow_html=True)
                     with st.expander("Forgot Password?"):
@@ -67,7 +72,7 @@ def login_register_page():
                                     st.warning("All fields are required.")
                                 else:
                                     try:
-                                        resp = requests.post(f"{API_URL}/reset-password", data={
+                                        resp = requests.post(f"{api_url}/reset-password", data={
                                             "username": rst_user.strip(),
                                             "recovery_key": rst_key.strip(),
                                             "new_password": rst_new_pass
@@ -75,7 +80,9 @@ def login_register_page():
                                         if resp.status_code == 200:
                                             st.success("Password reset! You can now login.")
                                         else:
-                                            st.error(resp.json().get("detail", "Reset failed"))
+                                            st.error(resp.json().get("detail", "Password reset failed."))
+                                    except requests.exceptions.ConnectionError:
+                                        st.error(f"Connection Error: Could not connect to API at `{api_url}`.")
                                     except Exception as e:
                                         st.error(f"Error: {e}")
 
@@ -93,7 +100,7 @@ def login_register_page():
                             st.warning("All fields are required.")
                         else:
                             try:
-                                response = requests.post(f"{API_URL}/register", data={
+                                response = requests.post(f"{api_url}/register", data={
                                     "username": new_user, 
                                     "password": new_pass,
                                     "recovery_key": recovery_key
@@ -104,5 +111,7 @@ def login_register_page():
                                 else:
                                     error_detail = response.json().get('detail', 'Registration failed')
                                     st.error(error_detail)
+                            except requests.exceptions.ConnectionError:
+                                st.error(f"Connection Error: Could not connect to API at `{api_url}`.")
                             except Exception as e:
                                 st.error(f"Error: {e}")

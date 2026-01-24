@@ -39,8 +39,9 @@ if 'access_token' not in st.session_state:
 # Define headers for authenticated requests
 auth_headers = {"Authorization": f"Bearer {st.session_state['access_token']}"}
 
-API_URL = os.getenv("API_URL", "http://localhost:8000")
+API_URL = os.getenv("API_URL", "http://localhost:8000").rstrip("/")
 API_ENDPOINT = f"{API_URL}/predict"
+print(f"🚀 Frontend configured to connect to Backend at: {API_URL}")
 
 # Helper Functions
 def display_dicom_image(file_bytes):
@@ -76,7 +77,7 @@ def get_prediction(image_bytes, filename, model_name):
         response.raise_for_status()  # Raise an exception for other bad status codes (e.g., 500)
         return response.json()
     except requests.exceptions.ConnectionError:
-        st.error("Connection Error: Could not connect to the API. Please ensure the backend server (api.py) is running.")
+        st.error(f"Connection Error: Could not connect to the API at `{API_URL}`. Please ensure the backend is running and the `API_URL` environment variable is set correctly.")
         return None
     except requests.exceptions.RequestException as e:
         st.error(f"API Request Error: {e}")
@@ -459,16 +460,18 @@ with tab_map["📜 History"]:
             params = {
                 "page": current_page, 
                 "limit": page_size, 
-                "search": search_term
+                "search": search_term,
             }
             response = requests.get(f"{API_URL}/history", params=params, headers=auth_headers)
-        if response.status_code == 200:
+            response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
+
             result = response.json()
             # Handle response structure (dict with data/total)
             if isinstance(result, dict):
                 db_history = result.get("data", [])
                 total_count = result.get("total", 0)
             else:
+                total_count = 0
                 db_history = [] # Fallback
 
             if db_history:
@@ -516,12 +519,18 @@ with tab_map["📜 History"]:
                     st.divider()
                     if st.button(f"🗑️ Delete {len(ids_to_delete)} Selected", type="primary"):
                         with st.spinner("Deleting records..."):
-                            for record_id in ids_to_delete:
-                                requests.delete(f"{API_URL}/history/{record_id}", headers=auth_headers)
-                        st.session_state['history_table_key'] += 1
-                        st.session_state['history_select_all'] = False
-                        st.success("Deleted!")
-                        st.rerun()
+                            try:
+                                for record_id in ids_to_delete:
+                                    res = requests.delete(f"{API_URL}/history/{record_id}", headers=auth_headers)
+                                    res.raise_for_status()
+                                st.session_state['history_table_key'] += 1
+                                st.session_state['history_select_all'] = False
+                                st.success("Deleted!")
+                                st.rerun()
+                            except requests.exceptions.ConnectionError:
+                                st.error(f"Connection Error: Could not connect to API at `{API_URL}`.")
+                            except requests.exceptions.HTTPError as e:
+                                st.error(f"Failed to delete. Server returned: {e.response.status_code}")
 
                 # Image Viewer Section
                 if 'view_scan_data' in st.session_state:
@@ -547,16 +556,20 @@ with tab_map["📜 History"]:
                         if file_id:
                             try:
                                 res = requests.get(f"{API_URL}/files/{file_id}", headers=auth_headers, stream=True)
-                                if res.status_code == 200:
+                                res.raise_for_status()
                                     # Handle DICOM or Standard Image
-                                    if view_data.get('filename', '').lower().endswith('.dcm') and "Original" in caption:
+                                if view_data.get('filename', '').lower().endswith('.dcm') and "Original" in caption:
                                         img = display_dicom_image(res.content)
-                                    else:
+                                else:
                                         img = Image.open(io.BytesIO(res.content))
                                     
-                                    if img:
+                                if img:
                                         with col:
                                             st.image(img, caption=caption, width=zoom_size)
+                            except requests.exceptions.ConnectionError:
+                                st.warning(f"Could not load {caption} (Connection Error).")
+                            except requests.exceptions.HTTPError:
+                                st.warning(f"Could not load {caption} (File not found or access denied).")
                             except Exception as e:
                                 with col:
                                     st.warning(f"Could not load {caption}.")
@@ -599,10 +612,12 @@ with tab_map["📜 History"]:
                             st.button("Next ▶", on_click=change_page, args=(current_page + 1,))
             else:
                 st.info("No history found in the database.")
-        else:
-            st.error("Failed to fetch history from backend.")
+    except requests.exceptions.ConnectionError:
+        st.error(f"Connection Error: Could not connect to the API at `{API_URL}`. Please ensure the backend is running and the `API_URL` environment variable is set correctly.")
+    except requests.exceptions.HTTPError as e:
+        st.error(f"Failed to fetch history from backend. Server returned: {e.response.status_code} {e.response.reason}")
     except Exception as e:
-        st.error(f"Could not connect to database endpoint: {e}")
+        st.error(f"An unexpected error occurred: {e}")
 
 with tab_map["📊 Dashboard"]:
     st.header("📊 Personal Analytics Dashboard")
@@ -615,9 +630,9 @@ with tab_map["📊 Dashboard"]:
                 params={"limit": 1000}, 
                 headers=auth_headers
             )
-            if response.status_code == 200:
-                data = response.json().get("data", [])
-                if data:
+            response.raise_for_status()
+            data = response.json().get("data", [])
+            if data:
                     df = pd.DataFrame(data)
                     
                     # Preprocessing
@@ -678,12 +693,14 @@ with tab_map["📊 Dashboard"]:
                     daily_counts = df.groupby('date').size()
                     st.line_chart(daily_counts)
                     
-                else:
-                    st.info("No data available. Upload and analyze some MRI scans to see your dashboard!")
             else:
-                st.error("Failed to fetch analytics data.")
+                    st.info("No data available. Upload and analyze some MRI scans to see your dashboard!")
+        except requests.exceptions.ConnectionError:
+            st.error(f"Connection Error: Could not connect to API at `{API_URL}`.")
+        except requests.exceptions.HTTPError as e:
+            st.error(f"Failed to fetch analytics data. Server returned: {e.response.status_code}")
         except Exception as e:
-            st.error(f"Error loading dashboard: {e}")
+            st.error(f"An error occurred while loading the dashboard: {e}")
 
 if '👑 Admin' in tab_map:
     with tab_map['👑 Admin']:
@@ -692,15 +709,15 @@ if '👑 Admin' in tab_map:
         with st.spinner("Loading admin statistics..."):
             try:
                 response = requests.get(f"{API_URL}/admin/stats", headers=auth_headers)
-                if response.status_code == 200:
-                    stats = response.json()
-                    total_users = stats.get("total_users", 0)
-                    user_activity = stats.get("user_activity", [])
+                response.raise_for_status()
+                stats = response.json()
+                total_users = stats.get("total_users", 0)
+                user_activity = stats.get("user_activity", [])
 
-                    st.metric("Total Registered Users", total_users)
-                    st.divider()
+                st.metric("Total Registered Users", total_users)
+                st.divider()
 
-                    if user_activity:
+                if user_activity:
                         df_activity = pd.DataFrame(user_activity).set_index("username")
                         
                         # Limit to Top 15 for the chart to prevent overcrowding
@@ -712,12 +729,14 @@ if '👑 Admin' in tab_map:
                         
                         with st.expander("View Full Activity Data"):
                             st.dataframe(df_activity, use_container_width=True)
-                    else:
-                        st.info("No user activity has been recorded yet.")
                 else:
-                    st.error(f"Failed to load admin stats: {response.json().get('detail', 'Unknown error')}")
+                        st.info("No user activity has been recorded yet.")
+            except requests.exceptions.ConnectionError:
+                st.error(f"Connection Error: Could not connect to API at `{API_URL}`.")
+            except requests.exceptions.HTTPError as e:
+                st.error(f"Failed to load admin stats. Server returned: {e.response.status_code} {e.response.reason}")
             except Exception as e:
-                st.error(f"Error connecting to the admin endpoint: {e}")
+                st.error(f"An error occurred connecting to the admin endpoint: {e}")
         
         st.subheader("👥 User Management")
         
@@ -739,17 +758,16 @@ if '👑 Admin' in tab_map:
             try:
                 params = {"page": current_page, "limit": page_size, "search": search_query}
                 u_res = requests.get(f"{API_URL}/admin/users", params=params, headers=auth_headers)
-                
-                if u_res.status_code == 200:
-                    data = u_res.json()
-                    users_list = data.get("data", [])
-                    total_users = data.get("total", 0)
+                u_res.raise_for_status()
+                data = u_res.json()
+                users_list = data.get("data", [])
+                total_users = data.get("total", 0)
                     
-                    st.caption(f"Showing {len(users_list)} of {total_users} users")
+                st.caption(f"Showing {len(users_list)} of {total_users} users")
 
-                    if not users_list:
+                if not users_list:
                         st.info("No users found.")
-                    else:
+                else:
                         for u in users_list:
                             with st.container(border=True):
                                 c1, c2, c3 = st.columns([3, 2, 3], vertical_alignment="center")
@@ -769,18 +787,30 @@ if '👑 Admin' in tab_map:
                                     with b1:
                                         if is_admin:
                                             if st.button("Demote", key=f"demote_{u['username']}", use_container_width=True):
-                                                requests.put(f"{API_URL}/admin/users/{u['username']}/role", json={"is_admin": False}, headers=auth_headers)
-                                                st.rerun()
+                                                try:
+                                                    res = requests.put(f"{API_URL}/admin/users/{u['username']}/role", json={"is_admin": False}, headers=auth_headers)
+                                                    res.raise_for_status()
+                                                    st.rerun()
+                                                except requests.RequestException as e:
+                                                    st.error(f"Failed to demote user: {e}")
                                         else:
                                             if st.button("Promote", key=f"promote_{u['username']}", use_container_width=True):
-                                                requests.put(f"{API_URL}/admin/users/{u['username']}/role", json={"is_admin": True}, headers=auth_headers)
-                                                st.rerun()
+                                                try:
+                                                    res = requests.put(f"{API_URL}/admin/users/{u['username']}/role", json={"is_admin": True}, headers=auth_headers)
+                                                    res.raise_for_status()
+                                                    st.rerun()
+                                                except requests.RequestException as e:
+                                                    st.error(f"Failed to promote user: {e}")
                                     with b2:
                                         with st.popover("Delete", use_container_width=True):
                                             st.markdown(f"Delete **{u['username']}**?")
                                             if st.button("Confirm", key=f"conf_del_{u['username']}", type="primary", use_container_width=True):
-                                                requests.delete(f"{API_URL}/admin/users/{u['username']}", headers=auth_headers)
-                                                st.rerun()
+                                                try:
+                                                    res = requests.delete(f"{API_URL}/admin/users/{u['username']}", headers=auth_headers)
+                                                    res.raise_for_status()
+                                                    st.rerun()
+                                                except requests.RequestException as e:
+                                                    st.error(f"Failed to delete user: {e}")
                         
                         # Pagination Controls
                         total_pages = math.ceil(total_users / page_size)
@@ -799,10 +829,12 @@ if '👑 Admin' in tab_map:
                             with c3:
                                 if current_page < total_pages:
                                     st.button("Next ▶", key="admin_next", on_click=change_admin_page, args=(current_page + 1,))
-                else:
-                    st.error(f"Failed to load users. Status: {u_res.status_code} | Detail: {u_res.text}")
+            except requests.exceptions.ConnectionError:
+                st.error(f"Connection Error: Could not connect to API at `{API_URL}`.")
+            except requests.exceptions.HTTPError as e:
+                st.error(f"Failed to load users. Server returned: {e.response.status_code} {e.response.reason}")
             except Exception as e:
-                st.error(f"Error loading users: {e}")
+                st.error(f"An error occurred while loading users: {e}")
 
 with tab_map["👤 Profile"]:
     st.header(f"👤 User: {st.session_state.get('username', 'Unknown')}")
@@ -834,9 +866,11 @@ with tab_map["👤 Profile"]:
                     if res.status_code == 200:
                         st.success("Password updated successfully!")
                     else:
-                        err_msg = res.json().get('detail', 'Failed to update password')
+                        err_msg = res.json().get('detail', 'Failed to update password.')
                         st.error(f"Error: {err_msg}")
-                except Exception as e:
+                except requests.exceptions.ConnectionError:
+                    st.error(f"Connection Error: Could not connect to API at `{API_URL}`.")
+                except requests.exceptions.RequestException as e:
                     st.error(f"Connection error: {e}")
 
     st.markdown('<hr style="margin-top: 30px; margin-bottom: 20px; border-color: rgba(255, 50, 50, 0.2);">', unsafe_allow_html=True)
@@ -865,9 +899,11 @@ with tab_map["👤 Profile"]:
                             st.query_params.clear()
                             st.rerun()
                         else:
-                            err_msg = res.json().get('detail', 'Deletion failed')
+                            err_msg = res.json().get('detail', 'Deletion failed.')
                             st.error(f"Error: {err_msg}")
-                    except Exception as e:
+                    except requests.exceptions.ConnectionError:
+                        st.error(f"Connection Error: Could not connect to API at `{API_URL}`.")
+                    except requests.exceptions.RequestException as e:
                         st.error(f"Connection error: {e}")
 
 with tab_map["ℹ️ About"]:

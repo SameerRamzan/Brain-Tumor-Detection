@@ -20,6 +20,7 @@ from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorGridFSBucket
 from datetime import datetime, timedelta
 from bson import ObjectId
 from dotenv import load_dotenv
+import re
 import gdown
 
 # Import local utility from data_utils.py
@@ -31,14 +32,35 @@ except ImportError:
 # Load environment variables
 load_dotenv()
 
+def extract_drive_id(url_or_id: str) -> str:
+    """Extracts the Google Drive file ID from a URL or returns the ID if it's already an ID."""
+    if not url_or_id:
+        return ""
+    # A typical ID is > 25 characters. This check is a bit loose but helps.
+    if re.match(r'^[a-zA-Z0-9_-]{25,}$', url_or_id):
+        return url_or_id
+    
+    # Regex to find the ID in various Google Drive URL formats
+    # e.g., /d/FILE_ID/
+    # e.g., ?id=FILE_ID
+    # e.g., drive.usercontent.google.com/download?id=FILE_ID&...
+    match = re.search(r'(?:/d/|id=)([a-zA-Z0-9_-]{25,})', url_or_id)
+    if match:
+        print(f"DEBUG: Extracted Drive ID '{match.group(1)}' from provided string.")
+        return match.group(1)
+    
+    print(f"DEBUG: Could not extract a standard Drive ID from '{url_or_id}'. Using the value as is.")
+    return url_or_id # Fallback to returning the original string
+
 def load_models_into_memory():
     """Loads all configured Keras models once on startup."""
     global MODELS
     for name, config in MODEL_CONFIG.items():
         # Check if model exists, if not try to download from Google Drive
         if not os.path.exists(config["path"]):
-            drive_id = os.getenv(f"{name.upper()}_DRIVE_ID")
-            if drive_id:
+            drive_id_or_url = os.getenv(f"{name.upper()}_DRIVE_ID")
+            if drive_id_or_url:
+                drive_id = extract_drive_id(drive_id_or_url)
                 print(f"⬇️ Model '{name}' not found. Downloading from Google Drive (ID: {drive_id})...")
                 try:
                     gdown.download(id=drive_id, output=config["path"], quiet=False)
@@ -65,11 +87,13 @@ async def lifespan(app: FastAPI):
     global db_client, history_collection, fs
     try:
         db_client = AsyncIOMotorClient(MONGO_URI)
+        # Force a connection check to fail fast if DB is unreachable
+        await db_client.admin.command('ping')
         history_collection = db_client.brain_tumor_db.history
         fs = AsyncIOMotorGridFSBucket(db_client.brain_tumor_db)
-        print("✅ Connected to MongoDB")
+        print(f"✅ Connected to MongoDB at {MONGO_URI}")
     except Exception as e:
-        print(f"⚠️ Could not connect to MongoDB: {e}")
+        print(f"⚠️ Could not connect to MongoDB at {MONGO_URI}: {e}")
     yield
     # Code to run on shutdown (optional)
     if db_client:
