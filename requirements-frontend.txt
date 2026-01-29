@@ -1,0 +1,8 @@
+streamlit
+requests
+pandas
+fpdf2
+matplotlib
+seaborn
+pydicom
+Pillow

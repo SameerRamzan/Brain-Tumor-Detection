@@ -1,23 +1,14 @@
 fastapi
 uvicorn
 python-multipart
-python-jose[cryptography]
-passlib[bcrypt]
+python-jose[cryptography] # For JWT
+passlib[bcrypt] # For password hashing
 motor
-tensorflow
-keras
+tensorflow-cpu
 numpy
 opencv-python-headless
 pillow
 pydicom
-streamlit
-requests
-pandas
-fpdf2
-matplotlib
-seaborn
 python-dotenv
-argon2-cffi
-pytest
-httpx
+argon2-cffi # Dependency for passlib
 huggingface-hub
