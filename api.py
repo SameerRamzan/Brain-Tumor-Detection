@@ -47,8 +47,8 @@ def download_model_from_hf(repo_id, filename, save_path):
         hf_hub_download(
             repo_id=repo_id,
             filename=filename,
-            local_dir=os.path.dirname(save_path)
-            # local_dir_use_symlinks=False # Use file copy, not symlinks
+            local_dir=os.path.dirname(save_path),
+            local_dir_use_symlinks=False # Important for serverless environments
         )
         print(f"✨ {save_path} download successful!")
         return True
@@ -56,32 +56,50 @@ def download_model_from_hf(repo_id, filename, save_path):
         print(f"❌ Failed to download from Hugging Face. Error: {e}")
         return False
 
-def load_models_into_memory():
-    """Loads all configured Keras models once on startup."""
-    global MODELS
-    hf_repo_id = os.getenv("HF_REPO_ID")
+async def load_single_model(model_name: str):
+    """
+    Loads a single Keras model on-demand.
+    Checks if the model file exists in the designated path, downloads it from
+    Hugging Face if not, and then loads it into the global MODELS dictionary.
+    This is designed for serverless environments where models are loaded lazily.
+    """
+    if model_name not in MODEL_CONFIG:
+        print(f"⚠️ Attempted to load unknown model '{model_name}'")
+        raise HTTPException(status_code=400, detail=f"Unknown model name: {model_name}")
 
-    for name, config in MODEL_CONFIG.items():
-        # Check if model exists, if not try to download from Google Drive
-        if not os.path.exists(config["path"]):
-            if hf_repo_id:
-                filename_in_repo = os.path.basename(config["path"])
-                print(f"⬇️ Model '{name}' not found locally. Attempting to download from Hugging Face...")
-                try:
-                    download_model_from_hf(
-                        repo_id=hf_repo_id,
-                        filename=filename_in_repo,
-                        save_path=config["path"]
-                    )
-                except Exception as e:
-                    print(f"❌ Failed to download model '{name}': {e}")
+    config = MODEL_CONFIG[model_name]
+    model_path = config["path"]
 
-        try:
-            MODELS[name] = tf.keras.models.load_model(config["path"])
-            print(f"✅ Model '{name}' loaded successfully from {config['path']}")
-        except Exception as e:
-            print(f"⚠️ Error loading model '{name}': {e}")
-            print(f"Server started without model '{name}'. Inference with this model will fail.")
+    # In a serverless environment, the /tmp directory is writable.
+    # Check if model file exists, if not, download it. This is crucial for cold starts.
+    if not os.path.exists(model_path):
+        hf_repo_id = os.getenv("HF_REPO_ID")
+        if hf_repo_id:
+            filename_in_repo = os.path.basename(model_path)
+            print(f"⬇️ Model '{model_name}' not found at {model_path}. Downloading from Hugging Face...")
+            try:
+                # Run download in a separate thread to avoid blocking the event loop
+                await asyncio.to_thread(
+                    download_model_from_hf,
+                    repo_id=hf_repo_id,
+                    filename=filename_in_repo,
+                    save_path=model_path
+                )
+            except Exception as e:
+                print(f"❌ Failed to download model '{model_name}': {e}")
+                raise HTTPException(status_code=503, detail=f"Could not download model '{model_name}'.")
+        else:
+            print(f"❌ Model file not found at {model_path} and HF_REPO_ID is not set.")
+            raise HTTPException(status_code=503, detail=f"Model file for '{model_name}' is missing.")
+
+    try:
+        print(f"🧠 Loading model '{model_name}' into memory from {model_path}...")
+        # Model loading is CPU/IO bound, so run it in a thread
+        MODELS[model_name] = await asyncio.to_thread(tf.keras.models.load_model, model_path)
+        print(f"✅ Model '{model_name}' loaded successfully.")
+    except Exception as e:
+        print(f"⚠️ Error loading model '{model_name}': {e}")
+        raise HTTPException(status_code=503, detail=f"Could not load model '{model_name}'.")
 
 # MongoDB Configuration
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
@@ -92,8 +110,6 @@ fs = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Code to run on startup
-    # Run model loading in background to prevent blocking server startup
-    asyncio.create_task(asyncio.to_thread(load_models_into_memory))
     global db_client, history_collection, fs
     try:
         db_client = AsyncIOMotorClient(MONGO_URI)
@@ -132,15 +148,19 @@ async def root():
 
 # Global Configuration
 MODELS = {}
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# For serverless environments like Vercel, /tmp is the only writable directory.
+# We check for the 'VERCEL' environment variable to decide the save path.
+MODEL_SAVE_DIR = "/tmp/models" if "VERCEL" in os.environ else os.path.dirname(os.path.abspath(__file__))
+os.makedirs(MODEL_SAVE_DIR, exist_ok=True)
+
 MODEL_CONFIG = {
     "VGG16": {
-        "path": os.getenv("VGG16_MODEL_PATH", os.path.join(BASE_DIR, "VGG16_brain_tumor_detection_model.keras")),
+        "path": os.path.join(MODEL_SAVE_DIR, os.path.basename(os.getenv("VGG16_MODEL_PATH", "VGG16_brain_tumor_detection_model.keras"))),
         "target_size": (224, 224),
         "preprocess_func": vgg16.preprocess_input
     },
     "ResNet50": {
-        "path": os.getenv("RESNET50_MODEL_PATH", os.path.join(BASE_DIR, "ResNet50_brain_tumor_detection_model.keras")),
+        "path": os.path.join(MODEL_SAVE_DIR, os.path.basename(os.getenv("RESNET50_MODEL_PATH", "ResNet50_brain_tumor_detection_model.keras"))),
         "target_size": (224, 224),
         "preprocess_func": resnet50.preprocess_input
     }
@@ -588,8 +608,9 @@ async def predict(
     model_name: str = Form(...),
     current_user: User = Depends(get_current_user)
 ):
-    if not MODELS:
-        raise HTTPException(status_code=503, detail="No models are loaded. Check server logs.")
+    # For serverless: Lazily load model if it's not in memory (handles cold starts)
+    if model_name not in MODELS:
+        await load_single_model(model_name)
 
     selected_model = MODELS.get(model_name)
     config = MODEL_CONFIG.get(model_name)

@@ -1,26 +1,4 @@
 services:
-  # 1. FastAPI Backend
-  - type: web
-    name: brain-tumor-api
-    env: docker
-    dockerfilePath: ./Dockerfile.api
-    plan: free
-    healthCheckPath: /docs
-    startCommand: uvicorn api:app --host 0.0.0.0 --port $PORT
-    envVars:
-      - key: MONGO_URI
-        sync: false # You will enter this manually in the Render Dashboard
-      - key: SECRET_KEY
-        generateValue: true
-      - key: VGG16_MODEL_PATH
-        value: VGG16_brain_tumor_detection_model.keras
-      - key: RESNET50_MODEL_PATH
-        value: ResNet50_brain_tumor_detection_model.keras
-      - key: VGG16_DRIVE_ID
-        sync: false
-      - key: RESNET50_DRIVE_ID
-        sync: false
-
   # 2. Streamlit Frontend
   - type: web
     name: brain-tumor-ui
@@ -29,8 +7,5 @@ services:
     plan: free
     startCommand: streamlit run app.py --server.port $PORT --server.address 0.0.0.0
     envVars:
-      - key: API_URL
-        fromService:
-          type: web
-          name: brain-tumor-api
-          property: url
+      - key: API_URL # IMPORTANT: Set this manually in the Render dashboard to your new Vercel API URL.
+        value: https://your-vercel-app-name.vercel.app
